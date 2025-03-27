@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		8758E8EA2D93F1FE006C5EAF /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8758E8E92D93F1FE006C5EAF /* AVFoundation.framework */; };
+		8758E8EC2D93F20A006C5EAF /* CoreMediaIO.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8758E8EB2D93F20A006C5EAF /* CoreMediaIO.framework */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		8758E8CC2D93F1C6006C5EAF /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +32,8 @@
 		8758E8BA2D93F1C6006C5EAF /* ScreenMirroring.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ScreenMirroring.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8758E8CB2D93F1C6006C5EAF /* ScreenMirroringTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ScreenMirroringTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8758E8D52D93F1C7006C5EAF /* ScreenMirroringUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ScreenMirroringUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		8758E8E92D93F1FE006C5EAF /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
+		8758E8EB2D93F20A006C5EAF /* CoreMediaIO.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreMediaIO.framework; path = System/Library/Frameworks/CoreMediaIO.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -52,6 +59,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8758E8EC2D93F20A006C5EAF /* CoreMediaIO.framework in Frameworks */,
+				8758E8EA2D93F1FE006C5EAF /* AVFoundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -78,6 +87,7 @@
 				8758E8BC2D93F1C6006C5EAF /* ScreenMirroring */,
 				8758E8CE2D93F1C6006C5EAF /* ScreenMirroringTests */,
 				8758E8D82D93F1C7006C5EAF /* ScreenMirroringUITests */,
+				8758E8E82D93F1FE006C5EAF /* Frameworks */,
 				8758E8BB2D93F1C6006C5EAF /* Products */,
 			);
 			sourceTree = "<group>";
@@ -90,6 +100,15 @@
 				8758E8D52D93F1C7006C5EAF /* ScreenMirroringUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		8758E8E82D93F1FE006C5EAF /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				8758E8EB2D93F20A006C5EAF /* CoreMediaIO.framework */,
+				8758E8E92D93F1FE006C5EAF /* AVFoundation.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -401,7 +420,11 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ScreenMirroring/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_NSCameraUsageDescription = "We need camera access for screen mirroring.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_PREPROCESS = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -428,7 +451,11 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ScreenMirroring/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_NSCameraUsageDescription = "We need camera access for screen mirroring.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_PREPROCESS = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
