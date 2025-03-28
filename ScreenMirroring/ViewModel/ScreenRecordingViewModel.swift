@@ -9,11 +9,13 @@ class ScreenRecordingViewModel: ObservableObject {
     @Published var isRecording = false
     @Published var recordingDuration: TimeInterval = 0
     @Published var statusMessage = ""
+    
+    // Keep this if you reference it in startRecording or elsewhere
+    @Published var selectedQuality: RecordingQuality = .high
 
     private var assetWriter: AVAssetWriter?
     private var assetWriterInput: AVAssetWriterInput?
     private var pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
-
     private var timer: Timer?
     private var tempURL: URL?
     private var firstFrameTime: CMTime?
@@ -25,19 +27,28 @@ class ScreenRecordingViewModel: ObservableObject {
     func startRecording(width: Int, height: Int) {
         guard !isRecording else { return }
 
-        outputWidth = width
-        outputHeight = height
+        // Detect orientation
+        let isPortrait = height > width
+        
+        // Calculate dimensions that maintain aspect ratio
+        // (If you are using 'selectedQuality' here, you can adjust logic as desired)
+        let targetWidth = isPortrait ? 720 : 1280
+        let dimensions = calculateOutputDimensions(
+            sourceWidth: width,
+            sourceHeight: height,
+            targetWidth: targetWidth
+        )
+
+        outputWidth = dimensions.width
+        outputHeight = dimensions.height
 
         setupAssetWriter()
         assetWriter?.startWriting()
         assetWriter?.startSession(atSourceTime: .zero)
-        guard assetWriter != nil else {
-            print("Asset Writer setup failed.")
-            return
-        }
 
         guard assetWriter != nil else {
             statusMessage = "Asset Writer setup failed."
+            print(statusMessage)
             return
         }
 
@@ -52,7 +63,7 @@ class ScreenRecordingViewModel: ObservableObject {
                 timer.invalidate()
                 return
             }
-            self.recordingDuration += 1.0 // Increment the duration
+            self.recordingDuration += 1.0
             DispatchQueue.main.async {
                 self.statusMessage = "Recording: \(self.formattedDuration) - Frames: \(self.frameCount)"
             }
@@ -73,10 +84,10 @@ class ScreenRecordingViewModel: ObservableObject {
 
             writer.finishWriting { [weak self] in
                 DispatchQueue.main.async {
-                    self?.statusMessage = "Recording saved"
+                    self?.statusMessage = "Processing recording..."
                     self?.promptForSaveLocation()
                     print("Recording finished")
-                    self?.resetRecording()
+                    // resetRecording() is called after user saves or cancels
                 }
             }
         } else {
@@ -95,8 +106,8 @@ class ScreenRecordingViewModel: ObservableObject {
 
         let relativeTime = CMTimeSubtract(timestamp, startTime)
         guard isRecording,
-            let adaptor = pixelBufferAdaptor,
-            adaptor.assetWriterInput.isReadyForMoreMediaData else {
+              let adaptor = pixelBufferAdaptor,
+              adaptor.assetWriterInput.isReadyForMoreMediaData else {
             return
         }
 
@@ -133,7 +144,6 @@ class ScreenRecordingViewModel: ObservableObject {
             if let input = assetWriterInput, assetWriter!.canAdd(input) {
                 assetWriter!.add(input)
             }
-
         } catch {
             statusMessage = "Setup error: \(error.localizedDescription)"
             print(statusMessage)
@@ -172,11 +182,65 @@ class ScreenRecordingViewModel: ObservableObject {
             savePanel.allowedFileTypes = ["mp4"]
         }
 
-        savePanel.begin { result in
+        savePanel.begin { [weak self] result in
+            guard let self = self else { return }
+            
             if result == .OK, let targetURL = savePanel.url {
-                try? FileManager.default.copyItem(at: tempURL, to: targetURL)
+                do {
+                    try FileManager.default.copyItem(at: tempURL, to: targetURL)
+                    try FileManager.default.removeItem(at: tempURL)
+                    self.statusMessage = "Recording saved"
+                } catch {
+                    self.statusMessage = "Error saving recording: \(error.localizedDescription)"
+                }
+            } else {
+                // User canceled
+                self.statusMessage = "Recording not saved"
                 try? FileManager.default.removeItem(at: tempURL)
             }
+            self.resetRecording()
+        }
+    }
+
+    private func calculateOutputDimensions(
+        sourceWidth: Int,
+        sourceHeight: Int,
+        targetWidth: Int? = nil,
+        targetHeight: Int? = nil
+    ) -> (width: Int, height: Int) {
+        guard targetWidth != nil || targetHeight != nil else {
+            return (sourceWidth, sourceHeight)
+        }
+
+        let aspectRatio = Double(sourceWidth) / Double(sourceHeight)
+
+        if let tw = targetWidth {
+            let calcHeight = Int(Double(tw) / aspectRatio)
+            return (tw, calcHeight)
+        }
+        if let th = targetHeight {
+            let calcWidth = Int(Double(th) * aspectRatio)
+            return (calcWidth, th)
+        }
+        return (sourceWidth, sourceHeight)
+    }
+}
+
+// Recording quality enum, also used in the parent
+enum RecordingQuality: String, CaseIterable, Identifiable {
+    case low = "Low (480p)"
+    case medium = "Medium (720p)"
+    case high = "High (1080p)"
+    case original = "Original Size"
+    
+    var id: String { rawValue }
+    
+    var dimensions: (width: Int?, height: Int?) {
+        switch self {
+        case .low: return (640, 480)
+        case .medium: return (1280, 720)
+        case .high: return (1920, 1080)
+        case .original: return (nil, nil)
         }
     }
 }

@@ -1,10 +1,3 @@
-//
-//  ScreenMirroringViewModel.swift
-//  ScreenMirroring
-//
-//  Created by Julius Canute on 26/3/2025.
-//
-
 import Foundation
 import AVFoundation
 import CoreMediaIO
@@ -18,30 +11,31 @@ class ScreenMirroringViewModel: NSObject, ObservableObject {
     @Published var isDiscovering = false
     @Published var showingDeviceList = false
     
-    // Create screenshot view model
+    // Single source of truth for quality:
+    @Published var selectedQuality: RecordingQuality = .high {
+        didSet {
+            recordingVM.selectedQuality = selectedQuality
+        }
+    }
+    
     let screenshotVM = ScreenshotViewModel()
-    // Create screen recording view model
-    let recordingVM = ScreenRecordingViewModel()    
+    let recordingVM = ScreenRecordingViewModel()
     
     private var captureSession = AVCaptureSession()
     private var discoveryTimer: Timer?
     private var discoveryAttempts = 0
     private let maxDiscoveryAttempts = 10
-    
     private var videoDataOutput: AVCaptureVideoDataOutput?
     private let videoDataOutputQueue = DispatchQueue(label: "videoDataOutputQueue")
-    
-    // Status message subscriber
     private var statusCancellables = Set<AnyCancellable>()
-    // Add this property in the main class definition
-
-
     
-  
     override init() {
         super.init()
         
-        // Subscribe to screenshot VM status messages
+        // Keep child’s quality in sync with parent
+        recordingVM.selectedQuality = selectedQuality
+        
+        // Subscribe to child status messages
         screenshotVM.$statusMessage
             .filter { !$0.isEmpty }
             .receive(on: RunLoop.main)
@@ -49,8 +43,7 @@ class ScreenMirroringViewModel: NSObject, ObservableObject {
                 self?.statusMessage = message
             }
             .store(in: &statusCancellables)
-            
-        // Subscribe to recording VM status messages
+        
         recordingVM.$statusMessage
             .filter { !$0.isEmpty }
             .receive(on: RunLoop.main)
@@ -78,7 +71,6 @@ class ScreenMirroringViewModel: NSObject, ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             self.configureCaptureSession(for: device)
-            
             DispatchQueue.main.async {
                 self.captureSession.startRunning()
             }
@@ -87,29 +79,38 @@ class ScreenMirroringViewModel: NSObject, ObservableObject {
     
     func toggleRecording() {
         if recordingVM.isRecording {
+            // stop
             recordingVM.stopRecording()
         } else {
-            recordingVM.startRecording(width: 1080, height: 1920)
+            if let connection = videoDataOutput?.connection(with: .video),
+               let inputPort = connection.inputPorts.first,
+               let formatDescription = inputPort.formatDescription
+            {
+                let videoDimensions = CMVideoFormatDescriptionGetDimensions(formatDescription)
+                let width = Int(videoDimensions.width)
+                let height = Int(videoDimensions.height)
+                recordingVM.startRecording(width: width, height: height)
+            }
         }
     }
-
+    
     func cleanup() {
         stopDiscovery()
         captureSession.stopRunning()
         captureSession = AVCaptureSession()
         
-        // Stop recording if active
+        // stop recording if active
         if recordingVM.isRecording {
             recordingVM.stopRecording()
         }
         
-        // Cancel subscriptions
+        // cancel subscriptions
         statusCancellables.forEach { $0.cancel() }
         statusCancellables.removeAll()
+        devices = []
         print("All resources released")
     }
     
-    // Delegate screenshot to the screenshot view model
     func takeScreenshot() {
         screenshotVM.takeScreenshot()
     }
@@ -143,27 +144,26 @@ class ScreenMirroringViewModel: NSObject, ObservableObject {
             stopDiscovery()
             if !devices.isEmpty {
                 showingDeviceList = true
-                statusMessage = "No dedicated screen capture device found. Please select from list."
+                statusMessage =
+                "No dedicated screen capture device found. Please select from list."
             } else {
-                statusMessage = "No devices found after \(discoveryAttempts) attempts."
+                statusMessage =
+                "No devices found after \(discoveryAttempts) attempts."
             }
         }
     }
     
     private func findScreenCaptureDevice() -> CaptureDevice? {
-        return devices.first(where: { $0.isScreenMirroringDevice })
+        devices.first(where: { $0.isScreenMirroringDevice })
     }
     
     private func discoverAvailableDevices() {
         let deviceTypes: [AVCaptureDevice.DeviceType] = [
             .continuityCamera,
             .external,
-            .externalUnknown,
             .builtInWideAngleCamera
         ]
-        
         let mediaTypes: [AVMediaType] = [.muxed, .video]
-        
         var discoveredDevices: [AVCaptureDevice] = []
         
         for mediaType in mediaTypes {
@@ -172,26 +172,26 @@ class ScreenMirroringViewModel: NSObject, ObservableObject {
                 mediaType: mediaType,
                 position: .unspecified
             )
-            
             for device in discoverySession.devices {
                 if !discoveredDevices.contains(where: { $0.uniqueID == device.uniqueID }) {
                     discoveredDevices.append(device)
                 }
             }
         }
-        
-        devices = discoveredDevices.map { CaptureDevice(name: $0.localizedName, device: $0) }
+        devices = discoveredDevices.map {
+            CaptureDevice(name: $0.localizedName, device: $0)
+        }
         print("Available devices: \(devices.map { $0.name })")
     }
     
     func getCaptureSession() -> AVCaptureSession {
-        return captureSession
+        captureSession
     }
     
     private func configureCaptureSession(for device: AVCaptureDevice) {
         captureSession.beginConfiguration()
         
-        // Remove existing inputs and outputs
+        // remove existing inputs and outputs
         for input in captureSession.inputs {
             captureSession.removeInput(input)
         }
@@ -199,23 +199,21 @@ class ScreenMirroringViewModel: NSObject, ObservableObject {
             captureSession.removeOutput(output)
         }
         
-        // Create and add input
+        // create and add input
         do {
             let input = try AVCaptureDeviceInput(device: device)
             if captureSession.canAddInput(input) {
                 captureSession.addInput(input)
-                
-                // Create and set up video output
                 let output = AVCaptureVideoDataOutput()
-                output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+                output.videoSettings = [
+                    kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+                ]
                 output.setSampleBufferDelegate(self, queue: videoDataOutputQueue)
                 output.alwaysDiscardsLateVideoFrames = true
                 
                 if captureSession.canAddOutput(output) {
                     captureSession.addOutput(output)
                     videoDataOutput = output
-                    print("Successfully configured capture session")
-                    
                     DispatchQueue.main.async {
                         self.hasActiveConnection = true
                         self.statusMessage = "Connected to \(device.localizedName)"
@@ -231,7 +229,6 @@ class ScreenMirroringViewModel: NSObject, ObservableObject {
 }
 
 // MARK: - Screen Capture Helper
-
 extension ScreenMirroringViewModel {
     func enableScreenCaptureDevices() {
         var property = CMIOObjectPropertyAddress(
@@ -249,7 +246,6 @@ extension ScreenMirroringViewModel {
             UInt32(sizeOfAllow),
             &allow
         )
-        
         if result != noErr {
             print("Error enabling screen capture devices: \(result)")
         } else {
@@ -259,18 +255,15 @@ extension ScreenMirroringViewModel {
 }
 
 // MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
-
 extension ScreenMirroringViewModel: AVCaptureVideoDataOutputSampleBufferDelegate {
-    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        // Forward the pixel buffer to both view models
+    func captureOutput(
+        _ output: AVCaptureOutput,
+        didOutput sampleBuffer: CMSampleBuffer,
+        from connection: AVCaptureConnection
+    ) {
         if let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
-            // Update preview dimensions based on the actual pixel buffer
-            let width = CVPixelBufferGetWidth(pixelBuffer)
-            let height = CVPixelBufferGetHeight(pixelBuffer)
-            
             screenshotVM.updatePixelBuffer(pixelBuffer)
             
-            // Forward to recording VM if recording is active
             if recordingVM.isRecording {
                 let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
                 recordingVM.updatePixelBuffer(pixelBuffer, timestamp: timestamp)
